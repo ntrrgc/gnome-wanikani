@@ -1,0 +1,19 @@
+
+.helloworld-label {
+    font-size: 36px;
+    font-weight: bold;
+    color: #ffffff;
+    background-color: rgba(10,10,10,0.7);
+    border-radius: 5px;
+    padding: .5em;
+}
+
+.wk-label {
+    padding: .15em .3em;
+    border-radius: 5px;
+}
+
+.has-reviews {
+    background-color: #a50d82;
+    font-weight: bold;
+}
