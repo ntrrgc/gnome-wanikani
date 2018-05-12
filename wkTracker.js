@@ -42,8 +42,30 @@ class SwitchLatestOperator {
         const returnedCallbackIndex = ++this.latestIndex;
         return function returnedCallback() {
             if (returnedCallbackIndex === self.latestIndex) {
-                callback.apply(this, arguments);
+                return callback.apply(this, arguments);
+            } else {
+                return false;
             }
+        }
+    }
+}
+
+class OrderedRequestResponseOperator {
+    constructor() {
+        this.latestRequestSent = 0;
+        this.latestRequestResponseReceived = 0;
+    }
+
+    wrapResponseCallback(responseCallback) {
+        // This method is called during request time.
+        const requestNumber = ++this.latestRequestSent;
+        return () => {
+            if (requestNumber <= this.latestRequestResponseReceived) {
+                // Discard this response.
+                return;
+            }
+            this.latestRequestResponseReceived = requestNumber;
+            return responseCallback.apply(null, arguments);
         }
     }
 }
@@ -64,7 +86,7 @@ var WKTracker = new Lang.Class({
         this.enabled = false; // whether requests will be sent
         this.announceFn = blackHoleAnnounceFn;
         this.httpSession = new Soup.SessionAsync();
-        this.switchLatestServerReviewData = new SwitchLatestOperator();
+        this.orderedOperatorServerReviewData = new OrderedRequestResponseOperator();
         this.switchLatestTimedReviewData = new SwitchLatestOperator();
     },
 
@@ -77,11 +99,20 @@ var WKTracker = new Lang.Class({
 
         // Make the first request, but not immediately, wait 1 second before just in case the extension
         // gets immediately disabled (which happens sometimes during GNOME start-up for unknown reasons)
-        Mainloop.timeout_add_seconds(1, this.switchLatestServerReviewData.wrap(() => {
+        Mainloop.timeout_add_seconds(1, this.orderedOperatorServerReviewData.wrapResponseCallback(() => {
             if (this.enabled) {
                 this._makeUpdateRequest();
             }
             return false; // don't repeat this timer
+        }));
+
+        const pollingIntervalSeconds = 10 * 60;
+        Mainloop.timeout_add_seconds(pollingIntervalSeconds, this.orderedOperatorServerReviewData.wrapResponseCallback(() => {
+            // The extension may have been disabled since the task was enqueued.
+            if (this.enabled) {
+                this._makeUpdateRequest();
+            }
+            return true;
         }));
     },
 
@@ -92,9 +123,10 @@ var WKTracker = new Lang.Class({
 
     _makeUpdateRequest() {
         // realUrl = `https://www.wanikani.com/api/user/${wkApiKey}/study-queue`
-        const request = Soup.Message.new("GET", "http://localhost:8000/test-output.json");
+        const request = Soup.Message.new("GET", `https://www.wanikani.com/api/user/${wkApiKey}/study-queue`);
         this.httpSession.queue_message(request, (httpSession, message) => {
             const responseText = message.response_body.flatten().get_data().toString();
+            // print(responseText)
 
             try {
                 const parsedResponse = JSON.parse(responseText);
@@ -109,18 +141,6 @@ var WKTracker = new Lang.Class({
         print(JSON.stringify(parsedResponse));
         this.latestReviewInfo = parsedResponse;
         this._newServerReviewInfo();
-
-
-        const pollingIntervalSeconds = 10 * 60;
-        if (this.enabled) {
-            Mainloop.timeout_add_seconds(pollingIntervalSeconds, this.switchLatestServerReviewData.wrap(() => {
-                // The extension may have been disabled since the task was enqueued.
-                if (this.enabled) {
-                    this._makeUpdateRequest();
-                }
-                return false;
-            }));
-        }
     },
 
     _newServerReviewInfo() {
@@ -139,8 +159,10 @@ var WKTracker = new Lang.Class({
         let text;
         if (reviewsAvailable > 0) {
             text = `WK ${reviewsAvailable}枚`
-        } else {
+        } else if (timeToNextReviewFullMs > 0) {
             text = `WK ${hours}h${pad2(minutes)}m`
+        } else {
+            text = 'WK Vacation mode'
         }
         const announcement = {
             text: text,
