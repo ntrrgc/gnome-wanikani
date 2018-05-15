@@ -146,7 +146,7 @@ var WKTracker = new Lang.Class({
     _newServerReviewInfo() {
         const reviewsAvailable = this.latestReviewInfo.requested_information.reviews_available;
         const timeToNextReviewFullMs = Math.max(0,
-            new Date(this.latestReviewInfo.requested_information.next_review_date).getTime() -
+            new Date(this.latestReviewInfo.requested_information.next_review_date * 1000).getTime() -
             new Date().getTime());
 
         let remainderTotalSeconds = Math.ceil(timeToNextReviewFullMs / 1000);
