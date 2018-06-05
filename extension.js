@@ -11,7 +11,7 @@ const wkTracker = new WKTracker();
 let wkLabel, button;
 
 function _showWaniKani() {
-    Gio.Subprocess.new(["gnome-open", "https://www.wanikani.com/review/"], Gio.SubprocessFlags.NONE);
+    Gio.Subprocess.new(["gnome-open", "https://www.wanikani.com/review/session"], Gio.SubprocessFlags.NONE);
 }
 
 function init() {
